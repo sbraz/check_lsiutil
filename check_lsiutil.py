@@ -92,7 +92,8 @@ class LSIUtil(nagiosplugin.Resource):
         ports = []
         for line in port_info.group(0).splitlines()[1:]:
             # To match " 1.  ioc0[…]"
-            if match := re.search(r"^\s*(\d+)\.", line):
+            match = re.search(r"^\s*(\d+)\.", line)
+            if match:
                 ports.append(match.group(1))
             else:
                 raise nagiosplugin.CheckError("Could not parse MPT port list")
@@ -134,7 +135,8 @@ class LSIUtil(nagiosplugin.Resource):
             # physical ports that do not have errors.
             phy_counters[phynum] = {e: 0 for e in ERROR_COUNTERS}
             for counter_name in ERROR_COUNTERS:
-                if match := re.search(rf"^\s*{counter_name}\s+([\d,]+)", counter_info, flags=re.M):
+                match = re.search(rf"^\s*{counter_name}\s+([\d,]+)", counter_info, flags=re.M)
+                if match:
                     # Counters use commas as thousands separators
                     phy_counters[phynum][counter_name] = int(match.group(1).replace(",", ""))
         return phy_counters
