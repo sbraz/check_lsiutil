@@ -64,17 +64,9 @@ class LSIUtil(nagiosplugin.Resource):
     @classmethod
     def _list_ports(cls):
         out = get_command_output(["sudo", "-n", "lsiutil", "0"])
-        port_info = re.search("^     Port Name.*?^$", out, flags=re.M | re.S)
-        if not port_info:
+        ports = re.findall(r"^     Port Name.*\n^\s*(\d+)\.", out, flags=re.M)
+        if not ports:
             raise nagiosplugin.CheckError("Could not find any MPT port")
-        ports = []
-        for line in port_info.group(0).splitlines()[1:]:
-            # To match " 1.  ioc0[…]"
-            match = re.search(r"^\s*(\d+)\.", line)
-            if match:
-                ports.append(match.group(1))
-            else:
-                raise nagiosplugin.CheckError("Could not parse MPT port list")
         return ports
 
     @classmethod
