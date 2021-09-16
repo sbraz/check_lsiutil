@@ -24,12 +24,17 @@ STATE_FILE_PATH = "/var/tmp"
 
 
 def get_command_output(command):
-    proc = subprocess.run(
-        command,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-    )
+    try:
+        proc = subprocess.run(
+            command,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise nagiosplugin.CheckError(
+            f"command {command} exited with status {exc.returncode}: {exc.stderr!r}"
+        )
     logger.debug("Output from %s: %s", " ".join(command), proc.stdout)
     return proc.stdout
 
