@@ -79,6 +79,7 @@ class LSIUtil(nagiosplugin.Resource):
         # Find the PCI device associated to this port
         pci_info = re.search(r"^Seg/Bus/Dev/Fun.*\n((\s*\d+){4})", command_output, flags=re.M)
         pci_address_parts = (int(e) for e in pci_info.group(1).split())
+        # pylint: disable-next=consider-using-f-string
         formatted_pci_address = "{:04x}:{:02x}:{:02x}.{:01x}".format(*pci_address_parts)
         pci_device_path = pathlib.Path("/sys/bus/pci/devices") / formatted_pci_address
         sas_address_to_serial_map = sas_address_to_serial(pci_device_path)
@@ -187,9 +188,7 @@ class LSIUtil(nagiosplugin.Resource):
         ports = self._list_ports()
         yield nagiosplugin.Metric(
             name="Ok",
-            value={
-                "message": "found {} MPT port{}".format(len(ports), "" if len(ports) == 1 else "s")
-            },
+            value={"message": f"found {len(ports)} MPT port{'' if len(ports) == 1 else 's'}"},
             context="metadata",
         )
         for port in ports:
