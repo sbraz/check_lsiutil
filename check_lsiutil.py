@@ -34,26 +34,24 @@ def get_command_output(command):
     return proc.stdout
 
 
-def address_to_blockdev():
-    out = get_command_output(["lsscsi", "-t"])
-    res = {}
-    for line in out.splitlines():
-        transport, blockdev = line.split()[2:4]
-        if not transport.startswith("sas:"):
-            continue
-        address = re.sub("^sas:", "", transport)
-        res[int(address, 16)] = blockdev
-    return res
-
-
-def blockdev_to_serial():
-    out = get_command_output(["lsblk", "-dJ", "-o", "PATH,SERIAL"])
+def sas_address_to_serial(parent_pci_device_path):
+    out = get_command_output(["lsblk", "-dJ", "-o", "TYPE,KNAME,SERIAL"])
     data = json.loads(out)
     res = {}
     for device in data["blockdevices"]:
-        if device["serial"] is not None:
-            # Sanitize serials to make perfdata processing easier
-            res[device["path"]] = device["serial"].replace("_", "-")
+        if device["type"] != "disk" or device["serial"] is None:
+            continue
+        disk_path = pathlib.Path("/sys/block") / device["kname"] / "device"
+        # Skip the disk if is not connected to the parent PCI device (the MPT port)
+        # Emulate Python 3.9's "is_relative_to" function
+        try:
+            disk_path.resolve().relative_to(parent_pci_device_path.resolve())
+        except ValueError:
+            continue
+        with (disk_path / "sas_address").open() as f:
+            sas_address = int(f.read(), 16)
+        # Sanitize serials to make perfdata processing easier
+        res[sas_address] = device["serial"].replace("_", "-")
     return res
 
 
@@ -62,26 +60,6 @@ class LSIUtil(nagiosplugin.Resource):
         self.args = args
         self.args_hash = args_hash
         self.metrics = {}
-        self.address_to_blockdev = None
-        self.blockdev_to_serial = None
-        self.metrics = {}
-
-    def _address_to_serial(self, address):
-        if self.address_to_blockdev is None:
-            self.address_to_blockdev = address_to_blockdev()
-            self.blockdev_to_serial = blockdev_to_serial()
-        try:
-            blockdev = self.address_to_blockdev[address]
-        except KeyError:
-            raise nagiosplugin.CheckError(
-                f"Could not determine block device associated with SAS address 0x{address:x}"
-            ) from None
-        try:
-            return self.blockdev_to_serial[blockdev]
-        except KeyError:
-            raise nagiosplugin.CheckError(
-                f"Could not determine serial number associated with block device {blockdev}"
-            ) from None
 
     @classmethod
     def _list_ports(cls):
@@ -99,7 +77,15 @@ class LSIUtil(nagiosplugin.Resource):
                 raise nagiosplugin.CheckError("Could not parse MPT port list")
         return ports
 
-    def _parse_devices(self, port, command_output):
+    @classmethod
+    def _parse_devices(cls, port, command_output):
+        # Find the PCI device associated to this port
+        pci_info = re.search(r"^Seg/Bus/Dev/Fun.*\n((\s*\d+){4})", command_output, flags=re.M)
+        pci_address_parts = (int(e) for e in pci_info.group(1).split())
+        formatted_pci_address = "{:04x}:{:02x}:{:02x}.{:01x}".format(*pci_address_parts)
+        pci_device_path = pathlib.Path("/sys/bus/pci/devices") / formatted_pci_address
+        sas_address_to_serial_map = sas_address_to_serial(pci_device_path)
+        # List devices connected to this port
         device_table = re.search(r"^ B___T.*?^$", command_output, flags=re.M | re.S)
         if not device_table:
             raise nagiosplugin.CheckError(f"Could not find any device on MPT port {port}")
@@ -110,8 +96,12 @@ class LSIUtil(nagiosplugin.Resource):
                 continue
             phynum = int(phynum)
             address = int(line[8:25], 16)
-            devices[phynum] = {"address": address}
-            devices[phynum]["serial"] = self._address_to_serial(address)
+            try:
+                devices[phynum] = {"serial": sas_address_to_serial_map[address]}
+            except KeyError:
+                raise nagiosplugin.CheckError(
+                    f"Could not determine block device associated with SAS address 0x{address:x}"
+                ) from None
         if not devices:
             raise nagiosplugin.CheckError(f"Could not find any device on MPT port {port}")
         return devices
@@ -143,7 +133,10 @@ class LSIUtil(nagiosplugin.Resource):
 
     def _probe_port(self, port):
         command_output = get_command_output(
-            ["sudo", "-n", "lsiutil", "-p", port, "-a", "16,20,12,0,0"]
+            # 69 = Show board manufacturing information
+            # 16 = Display attached devices
+            # 20 + 12 = Diagnostics + Display phy counters
+            ["sudo", "-n", "lsiutil", "-p", port, "-a", "69,16,20,12,0,0"]
         )
         devices = self._parse_devices(port, command_output)
         for phynum, info in devices.items():

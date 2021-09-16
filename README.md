@@ -10,7 +10,6 @@ The script requires:
 * lsiutil (1.70 or newer is required to support MPT3 devices)
 * [`nagiosplugin`](https://nagiosplugin.readthedocs.io) version 1.2.4 or newer
 * util-linux 2.27 or newer (lsblk with JSON output support)
-* lsscsi
 * sudo and access to `lsiutil` commands
 * read-write access to `/var/tmp/` (where the state file is created)
 
@@ -22,8 +21,8 @@ only grant sudo access to the required `lsiutil` commands.
 For example, create `/etc/sudoders.d/check_lsiutil` containing:
 ```
 icinga ALL=(ALL) NOPASSWD: /usr/bin/lsiutil 0
-icinga ALL=(ALL) NOPASSWD: /usr/bin/lsiutil -p [0-9] -a 16\,20\,12\,0\,0
-icinga ALL=(ALL) NOPASSWD: /usr/bin/lsiutil -p [0-9][0-9] -a 16\,20\,12\,0\,0
+icinga ALL=(ALL) NOPASSWD: /usr/bin/lsiutil -p [0-9] -a 69\,16\,20\,12\,0\,0
+icinga ALL=(ALL) NOPASSWD: /usr/bin/lsiutil -p [0-9][0-9] -a 69\,16\,20\,12\,0\,0
 ```
 
 # Integration with Icinga
