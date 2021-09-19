@@ -218,8 +218,8 @@ class LSIUtilSummary(nagiosplugin.Summary):
             key=lambda x: 10 if x.state == nagiosplugin.state.Ok else x.state.code,
             reverse=True,
         ):
-            # We only print errors
-            if result.state != nagiosplugin.state.Ok:
+            # We only print errors or metadata (number of ports)
+            if result.state != nagiosplugin.state.Ok or result.context.name == "metadata":
                 messages.append(result.hint)
         return ", ".join(messages)
 
