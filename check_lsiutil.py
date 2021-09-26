@@ -201,14 +201,16 @@ class LSIUtilSummary(nagiosplugin.Summary):
         return f"{results[0]} - no errors detected"
 
     def verbose(self, results):
+        messages = []
         for result in results:
             if result.context.name == "counter":
-                print(
+                messages.append(
                     f"{result.metric.value['serial']} at port {result.metric.value['phynum']}: "
                     f"{result.metric.name}: {result.metric.value['values']}"
                 )
             elif result.context.name == "metadata":
-                print(result.hint)
+                messages.append(result.hint)
+        return "\n".join(messages)
 
     def problem(self, results):
         messages = []
@@ -218,7 +220,7 @@ class LSIUtilSummary(nagiosplugin.Summary):
             key=lambda x: 10 if x.state == nagiosplugin.state.Ok else x.state.code,
             reverse=True,
         ):
-            # We only print errors or metadata (number of ports)
+            # We only display errors or metadata (number of ports)
             if result.state != nagiosplugin.state.Ok or result.context.name == "metadata":
                 messages.append(result.hint)
         return ", ".join(messages)
