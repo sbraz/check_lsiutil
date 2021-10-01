@@ -235,9 +235,7 @@ class MetadataContext(nagiosplugin.Context):
 class MovingCounterContext(nagiosplugin.Context):
     def evaluate(self, metric, resource):
         first_value = metric.value["values"][0]
-        max_value = first_value
-        for value in metric.value["values"]:
-            max_value = max(max_value, value)
+        max_value = max(metric.value["values"])
         if max_value > first_value:
             return self.result_cls(
                 nagiosplugin.state.Warn,
